@@ -1,0 +1,67 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<!-- Copyright (c) 2011  Rally Software Development Corp.  All rights reserved -->
+<html>
+	<head>
+		<title>Daily Iteration Status Report</title>
+		<meta name="Name" content="Daily Iteration Status Report" />
+    	<meta name="Version" content="1.27" />
+    	<meta name="Vendor" content="Model Metrics, Inc." />
+
+    	<script type="text/javascript" src="/apps/1.27/sdk.js"></script>
+    	<script type="text/javascript">
+    		var Report = {
+    			selectedIteration: 0,
+    			selectedIterationText: "",
+    			displayIterationDropDown: function(dataSource, element) {
+    				var config = { label : "Select an iteration " };
+          			var iterationDropdown = new rally.sdk.ui.IterationDropdown(config, rallyDataSource);
+          			iterationDropdown.display(element, function(sender, eventArgs) {
+          				this.selectedIteration = eventArgs.value;
+          				this.selectedIterationText = eventArgs.displayedValue;
+          			});
+    			},
+    			displayIterationBurnDown: function(dataSource, element) {
+    			
+    			},
+    			displayStoriesStatus: function(dataSource, element) {
+    			
+    			},
+    			displayBlockers: function(dataSource, element) {
+    			
+    			}
+    		}
+
+    		<!-- ------------------------------------------- //->
+    		function onLoad() {
+    			var rallyDataSource = new rally.sdk.data.RallyDataSource(
+    				'__WORKSPACE_OID__',
+                    '__PROJECT_OID__',
+                    '__PROJECT_SCOPING_UP__',
+                    '__PROJECT_SCOPING_DOWN__'
+    			);
+
+    			var report = new Report();
+    			
+    			// Display iteration drop-down control
+    			report.displayIterationDropDown(rallyDataSource, dojo.byId('iteration_dropdown'));
+
+    			// Display Iteration Burndown
+    			report.displayIterationBurnDown(rallyDataSource, dojo.byId('iteration_burndown'));
+
+    			// Display Stories Status
+    			report.displayStoriesStatus(dataSource, dojo.byId('story_status'));
+
+    			// Display Blockers
+    			report.displayBlockers(dataSource, dojo.byId('blockers'))
+    		}
+
+    		rally.addOnLoad(onLoad);
+    	</script>
+	</head>
+	<body>
+		<div id="iteration_dropdown"></div>
+		<div id="iteration_burndown"></div>
+		<div id="story_status"></div>
+		<div id="blockers"></div>
+	</body>
+</html>
