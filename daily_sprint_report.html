@@ -7,52 +7,162 @@
     	<meta name="Version" content="1.27" />
     	<meta name="Vendor" content="Model Metrics, Inc." />
 
-    	<script type="text/javascript" src="/apps/1.27/sdk.js"></script>
+    	<script type="text/javascript" src="https://rally1.rallydev.com/apps/1.27/sdk.js"></script>
     	<script type="text/javascript">
-    		var Report = {
-    			selectedIteration: 0,
+            var ReportConfig = function() {}
+            ReportConfig.prototype = {
+                dataSource: null,
+                ids:        {}
+            }
+
+    		var Report = function (config) {this.reportConfig = config;}
+            Report.prototype = {
+                reportConfig: null,
+    			selectedIteration: "",
     			selectedIterationText: "",
-    			displayIterationDropDown: function(dataSource, element) {
-    				var config = { label : "Select an iteration " };
-          			var iterationDropdown = new rally.sdk.ui.IterationDropdown(config, rallyDataSource);
-          			iterationDropdown.display(element, function(sender, eventArgs) {
-          				this.selectedIteration = eventArgs.value;
-          				this.selectedIterationText = eventArgs.displayedValue;
+                iterationDropdown: null,
+                blockerTable: null,
+                storyBoard: null,
+                dataSource: function() {
+                  return this.reportConfig.dataSource;  
+                },
+    			displayIterationDropDown: function() {
+                    self = this;
+                    
+    				var config = { 
+                        label : "Select an iteration ",
+                        rememberSelection: false
+                    };
+          			this.iterationDropdown = new rally.sdk.ui.IterationDropdown(config, this.dataSource());
+                    this.iterationDropdown.display(this.reportConfig.ids["iteration_dropdown"]);
+                    
+                    this.iterationDropdown.addEventListener("onChange", function(sender, eventArgs) {
+          				self.selectedIteration = self.iterationDropdown.getSelectedItem().ObjectID;
+                        self.render();
           			});
+
+                    this.render();
     			},
-    			displayIterationBurnDown: function(dataSource, element) {
-    			
+    			displayIterationBurnDown: function() {
+                    try {
+                        var burndown = new rally.sdk.ui.StandardReport({
+                            report: rally.sdk.ui.StandardReport.IterationBurndown,
+                            iterations: [self.selectedIteration],
+                            height: 300
+                        });
+                        burndown.display(this.reportConfig.ids["iteration_burndowndown"]);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
     			},
-    			displayStoriesStatus: function(dataSource, element) {
-    			
+    			displayStoriesStatus: function() {
+                    var config = {
+                        types: ["HierarchicalRequirement", "Defect"],
+                        attribute: "ScheduleState",
+                        columns: ["Defined", "In-Progress", "Completed", "Accepted"],
+                        query: new rally.sdk.util.Query('Iteration.ObjectId = ' + this.selectedIteration),
+                        enableRanking: false,
+                        readOnly: true
+                     };
+                    if (this.storyBoard == null) {
+                        this.storyBoard = new rally.sdk.ui.CardBoard(config, this.dataSource());
+                        this.storyBoard.display(this.reportConfig.ids["stories_status"]);
+                    }
+                    else {
+                        this.storyBoard.refresh(config) 
+                    }
     			},
-    			displayBlockers: function(dataSource, element) {
-    			
-    			}
+    			displayBlockers: function() {
+                    var config ={
+                        columns: [
+                             {
+                                 key: "WorkProduct.FormattedID",
+                                 header: "Id",
+                                 width: 100
+                             },
+                             {
+                                 key: "WorkProduct.Name",
+                                 header: "Name"
+                             },
+                             {
+                                 key: "BlockedBy.DisplayName",
+                                 header: "Creator",
+                                 width: 150
+                             }
+                         ],
+                        noDataMessage: "No Blockers!",
+                        fetch: "WorkProduct,FormattedID,Name,BlockedBy,DisplayName",
+                        type: "Blocker",
+                        width: 800
+                    };
+                    if (this.blockerTable != null) {this.blockerTable.destroy();}
+    			     this.blockerTable = new rally.sdk.ui.Table(config, this.dataSource());
+                     this.blockerTable.display(this.reportConfig.ids["blockers"]);
+    			},
+                display: function() {
+                    if (this.reportConfig == null) {
+                        throw "ReportConfig must be set before displaying the Report.";
+                    }
+                    // Show page print tool
+                    rally.sdk.ui.AppHeader.addPageTool(rally.sdk.ui.PageTools.BuiltIn.Print);
+                    rally.sdk.ui.AppHeader.showPageTools(true);
+
+                    self = this;
+                    // Get current sprint
+                    var today = rally.sdk.util.DateTime.format(new Date(), "yyyy-MM-dd")+ "T00:00:00.000Z";
+                    this.dataSource().find({
+                       key: "iteration",
+                       type: "iteration",
+                       query: rally.sdk.util.Query.and(['StartDate <= ' + today, 'EndDate >= ' + today]),
+                       fetch: "Name,ObjectID,StartDate,EndDate"
+                    }, function(results) {
+                        self.selectedIteration = results.iteration[0].ObjectID;
+                        self.reportConfig.ids["title"].innerHTML = "Iteration " + results.iteration[0].Name + ": " + self.formatDateString(results.iteration[0].StartDate) + " - " + self.formatDateString(results.iteration[0].EndDate);
+                        self.reportConfig.ids["report_date"].innerHTML = "Status for " + rally.sdk.util.DateTime.format(new Date(), "MM/dd/yyyy");
+                        self.displayIterationDropDown();
+                    }, function(response) {
+                        throw response;
+                    });
+                },
+                formatDateString: function(dateString) {
+                  return rally.sdk.util.DateTime.format(rally.sdk.util.DateTime.fromIsoString(dateString), "MM/dd/yyyy");
+                },
+                render: function(sprintChange) {
+                    this.displayIterationBurnDown(sprintChange);
+                    this.displayStoriesStatus(sprintChange);
+                    this.displayBlockers(sprintChange);  
+                }
     		}
 
     		<!-- ------------------------------------------- //->
     		function onLoad() {
-    			var rallyDataSource = new rally.sdk.data.RallyDataSource(
-    				'__WORKSPACE_OID__',
-                    '__PROJECT_OID__',
-                    '__PROJECT_SCOPING_UP__',
-                    '__PROJECT_SCOPING_DOWN__'
-    			);
+                var config = new ReportConfig();
+                if(rally.sdk.util.Context.getRunningMode() == 'External') {
+                    config.dataSource = new rally.sdk.data.RallyDataSource(
+                        '4910257184',
+                        '4910257268',
+                        'false',
+                        'true'
+                    );
+                }
+                else {
+                    config.dataSource = new rally.sdk.data.RallyDataSource(
+                        '__WORKSPACE_OID__',
+                        '__PROJECT_OID__',
+                        '__PROJECT_SCOPING_UP__',
+                        '__PROJECT_SCOPING_DOWN__'
+                    );
+                }
+                config.ids["iteration_dropdown"] = dojo.byId('iteration_dropdown');
+                config.ids["iteration_burndowndown"] = dojo.byId('iteration_burndown');
+                config.ids["stories_status"] = dojo.byId('story_status');
+                config.ids["blockers"] = dojo.byId('blockers');
+                config.ids["title"] = dojo.byId('title');
+                config.ids["report_date"] = dojo.byId('report_date');
 
-    			var report = new Report();
-    			
-    			// Display iteration drop-down control
-    			report.displayIterationDropDown(rallyDataSource, dojo.byId('iteration_dropdown'));
-
-    			// Display Iteration Burndown
-    			report.displayIterationBurnDown(rallyDataSource, dojo.byId('iteration_burndown'));
-
-    			// Display Stories Status
-    			report.displayStoriesStatus(dataSource, dojo.byId('story_status'));
-
-    			// Display Blockers
-    			report.displayBlockers(dataSource, dojo.byId('blockers'))
+    			var report = new Report(config);
+                report.display();
     		}
 
     		rally.addOnLoad(onLoad);
@@ -60,8 +170,18 @@
 	</head>
 	<body>
 		<div id="iteration_dropdown"></div>
+        <h1 id="title"></h1>
+        <h2 id="report_date"></h2>
+        <h2>Iteration Burndown</h2>
 		<div id="iteration_burndown"></div>
-		<div id="story_status"></div>
-		<div id="blockers"></div>
+        <div style="clear: both;"></div>
+        <div id="blockers">
+            <h2>Blocked User Stories</h2>
+        </div>
+        <div style="clear: both;"></div>
+        <br/>
+		<div id="story_status" style="width='600px';">
+            <h2>User Stories</h2>
+        </div>
 	</body>
 </html>
